@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import mammoth from 'mammoth';
 import { saveAs } from 'file-saver';
+import SectionEditor from './SectionEditor';
 
 // Template options
 const TEMPLATES = {
@@ -104,6 +105,7 @@ export default function ConversionTool() {
   const [convertedHTML, setConvertedHTML] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [currentStage, setCurrentStage] = useState<'stage1' | 'stage2'>('stage1');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle file upload
@@ -507,10 +509,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
+  // Move to Stage 2 (Section Editor)
+  const goToStage2 = () => {
+    setCurrentStage('stage2');
+  };
+
+  // Return from Stage 2 to Stage 1
+  const backToStage1 = () => {
+    setCurrentStage('stage1');
+  };
+
+  // Save from Stage 2
+  const handleStage2Save = (html: string) => {
+    setConvertedHTML(html);
+    setCurrentStage('stage1');
+    alert('Changes saved! You can now download or copy the refined HTML.');
+  };
+
+  // If in Stage 2, show Section Editor
+  if (currentStage === 'stage2') {
+    return (
+      <SectionEditor
+        initialHtml={convertedHTML}
+        onSave={handleStage2Save}
+        onBack={backToStage1}
+      />
+    );
+  }
+
+  // Stage 1 UI
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
       <div className="text-center mb-12 pt-8">
+        <div className="inline-block px-4 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium mb-3">
+          Stage 1: Initial Conversion
+        </div>
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
           Word to HTML Converter
         </h1>
@@ -604,9 +638,15 @@ document.addEventListener('DOMContentLoaded', function() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-semibold text-gray-800">
-              Step 3: Preview & Download
+              Step 3: Preview & Refine
             </h2>
             <div className="flex gap-3">
+              <button
+                onClick={goToStage2}
+                className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all flex items-center gap-2 font-semibold shadow-lg"
+              >
+                ✨ Next: Edit & Style Sections
+              </button>
               <button
                 onClick={handleCopy}
                 className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all flex items-center gap-2"
