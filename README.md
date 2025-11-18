@@ -42,28 +42,55 @@ cd contentconversiontool
 npm install
 ```
 
-3. Run the development server:
+3. **(Optional) Configure AI Features**: For AI-powered content analysis
+```bash
+cp .env.example .env.local
+# Edit .env.local and add your Anthropic API key
+# Get your key from: https://console.anthropic.com/
+```
+
+4. Run the development server:
 ```bash
 npm run dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Usage
+## Usage: Multi-Stage Workflow
 
+### Stage 1: Initial Conversion
 1. **Select a Template**: Choose between "Multi-Casino Comparison" or "Single Casino Review"
 2. **Upload .docx File**: Click the upload area or drag & drop your Word document
 3. **Convert**: Click "Convert to HTML" to generate styled HTML
 4. **Preview**: Toggle the live preview to see how your content looks
-5. **Export**: Download the HTML file or copy it to clipboard
+5. **Next**: Click "Edit & Style Sections" to proceed to Stage 2
+
+### Stage 2: Interactive Section Editor
+1. **View Sections**: See all content broken down into editable sections
+2. **AI Analysis** (Optional): Click "AI Smart Analysis" for intelligent style suggestions
+3. **Apply Styles**: Select from 10+ style templates for each section:
+   - Platform Card, Hero Section, FAQ, Feature List, etc.
+4. **Reorder**: Move sections up/down to reorganize content
+5. **Preview**: Live preview updates with your styling changes
+6. **Export**: Save your refined HTML and return to Stage 1
+
+### Final Step
+- **Download** the HTML file or **Copy** to clipboard for use in your CMS
 
 ## How It Works
 
-1. **File Parsing**: Mammoth.js extracts raw text from your .docx file
-2. **Template Mapping**: The text is intelligently mapped to the selected HTML template structure
-3. **Styling**: Your custom CSS classes are applied automatically
-4. **Preview**: Live preview renders the HTML with your stylesheet
-5. **Export**: Download or copy the complete HTML for use in your CMS
+### Stage 1: Automated Structure Extraction
+1. **File Parsing**: Mammoth.js preserves document structure (headings, lists, tables)
+2. **Template Mapping**: Content is intelligently mapped to the selected HTML template
+3. **Section Detection**: Automatically identifies FAQs, pros/cons, features, bonuses, etc.
+4. **Semantic HTML**: Generates proper heading hierarchy (H2, H3, H4)
+
+### Stage 2: Manual Refinement with AI
+1. **Recursive Parsing**: Extracts all content elements from nested HTML structures
+2. **AI Analysis** (Optional): Claude AI analyzes content and suggests optimal style templates
+3. **Visual Styling**: Apply different styling patterns to each section via visual interface
+4. **Live Preview**: See changes in real-time with your custom CSS
+5. **Export**: Generate production-ready HTML
 
 ## Template Structures
 
@@ -140,6 +167,23 @@ contentconversiontool/
 └── README.md
 ```
 
+## AI Features (Optional)
+
+The tool includes **optional AI-powered analysis** using Anthropic's Claude:
+
+- **Smart Section Detection**: AI analyzes your content and identifies logical sections
+- **Style Suggestions**: Automatically suggests the best style template for each section
+- **Context Understanding**: Recognizes FAQs, feature lists, comparison tables, etc.
+- **Intelligent Grouping**: Groups related content together semantically
+
+To enable AI features:
+1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
+2. Create `.env.local` file in the project root
+3. Add: `ANTHROPIC_API_KEY=your_api_key_here`
+4. In Stage 2, click "AI Smart Analysis" button
+
+**Note**: AI features are completely optional. The tool works fully without an API key using rule-based parsing.
+
 ## Building for Production
 
 ```bash
@@ -147,14 +191,26 @@ npm run build
 npm start
 ```
 
+## Completed Features
+
+- ✅ Multi-stage workflow (Initial conversion + Manual refinement)
+- ✅ Two HTML template structures (Multi-Casino, Single Casino)
+- ✅ Advanced structure preservation (headings, lists, tables)
+- ✅ 10+ style templates (Platform Card, Hero, FAQ, Feature List, etc.)
+- ✅ AI-powered content analysis (optional)
+- ✅ Interactive section editor with live preview
+- ✅ Section reordering and deletion
+- ✅ Export to HTML file or clipboard
+
 ## Future Enhancements
 
 - [ ] More template options
-- [ ] Advanced text parsing (preserve formatting, lists, tables)
 - [ ] Bulk file conversion
 - [ ] Cloud storage integration
 - [ ] API for programmatic access
 - [ ] More export formats (Markdown, JSON, etc.)
+- [ ] Custom style template creation
+- [ ] Collaborative editing features
 
 ## License
 

@@ -164,9 +164,10 @@ export default function SectionEditor({ initialHtml, onSave, onBack }: SectionEd
     sections.length > 0 ? sections[0].id : null
   );
   const [previewHtml, setPreviewHtml] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const previewRef = useRef<HTMLIFrameElement>(null);
 
-  // Parse HTML into editable sections
+  // Parse HTML into editable sections - recursively traverse nested structures
   function parseHtmlIntoSections(html: string): Section[] {
     if (typeof window === 'undefined') return [];
 
@@ -175,11 +176,11 @@ export default function SectionEditor({ initialHtml, onSave, onBack }: SectionEd
     const sections: Section[] = [];
     let order = 0;
 
-    // Extract all top-level elements
-    const body = doc.body;
-    Array.from(body.children).forEach((element) => {
+    // Recursively extract content elements
+    function extractContent(element: Element) {
       const tagName = element.tagName.toLowerCase();
 
+      // Content elements we want to capture
       if (tagName.match(/^h[1-6]$/)) {
         const level = parseInt(tagName[1]);
         sections.push({
@@ -191,7 +192,7 @@ export default function SectionEditor({ initialHtml, onSave, onBack }: SectionEd
           order: order++,
           level,
         });
-      } else if (tagName === 'p') {
+      } else if (tagName === 'p' && element.textContent?.trim()) {
         sections.push({
           id: `section-${order}`,
           type: 'paragraph',
@@ -218,20 +219,65 @@ export default function SectionEditor({ initialHtml, onSave, onBack }: SectionEd
           styleNode: 'comparisonTable',
           order: order++,
         });
-      } else if (tagName === 'div') {
-        // Group complex div structures
-        sections.push({
-          id: `section-${order}`,
-          type: 'group',
-          content: element.textContent || '',
-          htmlContent: element.outerHTML,
-          styleNode: 'body',
-          order: order++,
+      } else {
+        // For container elements, traverse children
+        Array.from(element.children).forEach((child) => {
+          extractContent(child);
         });
       }
+    }
+
+    // Start extraction from body
+    Array.from(doc.body.children).forEach((child) => {
+      extractContent(child);
     });
 
     return sections;
+  }
+
+  // AI-powered content analysis
+  async function analyzeWithAI() {
+    setIsAnalyzing(true);
+    try {
+      const response = await fetch('/api/analyze-content', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: initialHtml,
+          styleNodes: STYLE_NODES,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to analyze content');
+      }
+
+      const { sections: aiSections } = await response.json();
+
+      // Map AI suggestions to our section format
+      const newSections: Section[] = aiSections.map((aiSection: any, index: number) => ({
+        id: `section-${index}`,
+        type: aiSection.type,
+        content: aiSection.content,
+        htmlContent: aiSection.htmlContent,
+        styleNode: aiSection.suggestedStyle || 'body',
+        order: index,
+        level: aiSection.type === 'heading' ? 2 : undefined,
+      }));
+
+      setSections(newSections);
+      if (newSections.length > 0) {
+        setSelectedSectionId(newSections[0].id);
+      }
+
+      alert(`AI Analysis complete! Found ${newSections.length} sections with smart style suggestions.`);
+    } catch (error) {
+      console.error('AI analysis failed:', error);
+      alert(error instanceof Error ? error.message : 'AI analysis failed. Using basic parsing.');
+    } finally {
+      setIsAnalyzing(false);
+    }
   }
 
   // Update preview when sections change
@@ -339,6 +385,13 @@ export default function SectionEditor({ initialHtml, onSave, onBack }: SectionEd
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
             >
               ← Back to Stage 1
+            </button>
+            <button
+              onClick={analyzeWithAI}
+              disabled={isAnalyzing}
+              className="px-4 py-2 text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAnalyzing ? '🤖 Analyzing...' : '🤖 AI Smart Analysis'}
             </button>
             <button
               onClick={updatePreview}
