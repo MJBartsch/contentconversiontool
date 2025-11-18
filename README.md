@@ -1,36 +1,165 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Word to HTML Content Conversion Tool
+
+An automated workflow tool for converting plain text from Word documents (.docx) to styled HTML using custom templates and CSS.
+
+## Features
+
+- **📄 .docx File Upload**: Drag & drop or click to upload Word documents
+- **🎨 Template Selection**: Choose between two HTML template structures:
+  - **Multi-Casino Comparison**: For comparison articles, listicles, and multiple brand reviews
+  - **Single Casino Review**: For in-depth single brand/product reviews
+- **👁️ Live Preview**: Split-view interface showing HTML code and live preview side-by-side
+- **⬇️ Export Options**:
+  - Download as `.html` file
+  - Copy HTML to clipboard
+- **🎯 Custom Styling**: Uses your custom CSS stylesheet for consistent branding
+
+## Tech Stack
+
+- **Next.js 16** - React framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Utility-first styling
+- **Mammoth.js** - .docx file parsing
+- **File-saver** - Download functionality
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd contentconversiontool
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Run the development server:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Learn More
+## Usage
 
-To learn more about Next.js, take a look at the following resources:
+1. **Select a Template**: Choose between "Multi-Casino Comparison" or "Single Casino Review"
+2. **Upload .docx File**: Click the upload area or drag & drop your Word document
+3. **Convert**: Click "Convert to HTML" to generate styled HTML
+4. **Preview**: Toggle the live preview to see how your content looks
+5. **Export**: Download the HTML file or copy it to clipboard
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How It Works
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **File Parsing**: Mammoth.js extracts raw text from your .docx file
+2. **Template Mapping**: The text is intelligently mapped to the selected HTML template structure
+3. **Styling**: Your custom CSS classes are applied automatically
+4. **Preview**: Live preview renders the HTML with your stylesheet
+5. **Export**: Download or copy the complete HTML for use in your CMS
 
-## Deploy on Vercel
+## Template Structures
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Multi-Casino Comparison Template
+Best for:
+- Comparison articles
+- Top 10 lists
+- Multiple brand reviews
+- Feature comparisons
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Includes:
+- Quick verdict sections
+- Comparison tables
+- Multiple platform cards
+- Trust signals
+
+### Single Casino Review Template
+Best for:
+- In-depth reviews
+- Single product analysis
+- Detailed brand coverage
+
+Includes:
+- Rating sections
+- Tabbed content (Overview, Bonuses, Games, Pros & Cons)
+- Stats bars
+- Platform details
+
+## Customization
+
+### Adding New Templates
+
+To add a new template, edit `app/components/ConversionTool.tsx`:
+
+1. Add template to `TEMPLATES` object:
+```typescript
+const TEMPLATES = {
+  yourTemplate: {
+    name: 'Your Template Name',
+    description: 'Template description',
+    icon: '🎯',
+  },
+};
+```
+
+2. Create HTML generation function:
+```typescript
+const generateYourTemplateHTML = (text: string): string => {
+  // Your template logic here
+  return htmlString;
+};
+```
+
+3. Add case to `convertToHTML` function
+
+### Updating CSS
+
+Replace `/public/css/styling-test-page-fixed.css` with your custom stylesheet.
+
+## Project Structure
+
+```
+contentconversiontool/
+├── app/
+│   ├── components/
+│   │   └── ConversionTool.tsx   # Main conversion component
+│   ├── page.tsx                  # Home page
+│   └── layout.tsx                # Root layout
+├── public/
+│   ├── css/
+│   │   └── styling-test-page-fixed.css  # Custom stylesheet
+│   └── templates/                # Template storage (if needed)
+├── package.json
+└── README.md
+```
+
+## Building for Production
+
+```bash
+npm run build
+npm start
+```
+
+## Future Enhancements
+
+- [ ] More template options
+- [ ] Advanced text parsing (preserve formatting, lists, tables)
+- [ ] Bulk file conversion
+- [ ] Cloud storage integration
+- [ ] API for programmatic access
+- [ ] More export formats (Markdown, JSON, etc.)
+
+## License
+
+[Your License Here]
+
+## Support
+
+For issues or questions, please [create an issue](link-to-issues).
