@@ -18,10 +18,89 @@ const TEMPLATES = {
   },
 };
 
+// Helper to parse HTML string into a DOM structure
+const parseHTML = (htmlString: string) => {
+  if (typeof window === 'undefined') return null;
+  const parser = new DOMParser();
+  return parser.parseFromString(htmlString, 'text/html');
+};
+
+// Extract structured content from Word HTML
+const extractStructuredContent = (htmlString: string) => {
+  const doc = parseHTML(htmlString);
+  if (!doc) return { headings: [], paragraphs: [], lists: [], tables: [] };
+
+  const headings: { level: number; text: string }[] = [];
+  const paragraphs: string[] = [];
+  const lists: { type: 'ul' | 'ol'; items: string[] }[] = [];
+  const tables: string[][] = [];
+
+  // Extract headings (h1-h6)
+  doc.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((heading) => {
+    const level = parseInt(heading.tagName.substring(1));
+    headings.push({ level, text: heading.textContent?.trim() || '' });
+  });
+
+  // Extract paragraphs
+  doc.querySelectorAll('p').forEach((p) => {
+    const text = p.textContent?.trim();
+    if (text && text.length > 0) {
+      paragraphs.push(text);
+    }
+  });
+
+  // Extract lists
+  doc.querySelectorAll('ul, ol').forEach((list) => {
+    const items: string[] = [];
+    list.querySelectorAll('li').forEach((li) => {
+      const text = li.textContent?.trim();
+      if (text) items.push(text);
+    });
+    if (items.length > 0) {
+      lists.push({
+        type: list.tagName.toLowerCase() as 'ul' | 'ol',
+        items,
+      });
+    }
+  });
+
+  // Extract tables
+  doc.querySelectorAll('table').forEach((table) => {
+    const rows: string[][] = [];
+    table.querySelectorAll('tr').forEach((tr) => {
+      const cells: string[] = [];
+      tr.querySelectorAll('td, th').forEach((cell) => {
+        cells.push(cell.textContent?.trim() || '');
+      });
+      if (cells.length > 0) rows.push(cells);
+    });
+    if (rows.length > 0) tables.push(...rows);
+  });
+
+  return { headings, paragraphs, lists, tables };
+};
+
+// Detect section type based on content
+const detectSectionType = (heading: string): string => {
+  const lower = heading.toLowerCase();
+  if (lower.includes('faq') || lower.includes('question')) return 'faq';
+  if (lower.includes('pro') && lower.includes('con')) return 'proscons';
+  if (lower.includes('pros') || lower.includes('advantages')) return 'pros';
+  if (lower.includes('cons') || lower.includes('disadvantages')) return 'cons';
+  if (lower.includes('feature')) return 'features';
+  if (lower.includes('comparison') || lower.includes('compare')) return 'comparison';
+  if (lower.includes('bonus')) return 'bonus';
+  if (lower.includes('game')) return 'games';
+  if (lower.includes('payment') || lower.includes('banking')) return 'payment';
+  if (lower.includes('support')) return 'support';
+  if (lower.includes('security') || lower.includes('license')) return 'security';
+  return 'general';
+};
+
 export default function ConversionTool() {
   const [selectedTemplate, setSelectedTemplate] = useState<'multiCasino' | 'singleCasino' | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [extractedText, setExtractedText] = useState<string>('');
+  const [extractedHTML, setExtractedHTML] = useState<string>('');
   const [convertedHTML, setConvertedHTML] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -39,9 +118,9 @@ export default function ConversionTool() {
       // Read the .docx file
       const arrayBuffer = await file.arrayBuffer();
 
-      // Extract text using mammoth
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      setExtractedText(result.value);
+      // Extract HTML using mammoth (preserves structure)
+      const result = await mammoth.convertToHtml({ arrayBuffer });
+      setExtractedHTML(result.value);
 
       // Auto-convert if template is selected
       if (selectedTemplate) {
@@ -55,17 +134,17 @@ export default function ConversionTool() {
     }
   };
 
-  // Convert text to HTML based on selected template
-  const convertToHTML = (text: string, template: 'multiCasino' | 'singleCasino') => {
+  // Convert HTML to template-based HTML
+  const convertToHTML = (htmlString: string, template: 'multiCasino' | 'singleCasino') => {
     setIsProcessing(true);
 
     try {
       let html = '';
 
       if (template === 'multiCasino') {
-        html = generateMultiCasinoHTML(text);
+        html = generateMultiCasinoHTML(htmlString);
       } else {
-        html = generateSingleCasinoHTML(text);
+        html = generateSingleCasinoHTML(htmlString);
       }
 
       setConvertedHTML(html);
@@ -78,25 +157,64 @@ export default function ConversionTool() {
     }
   };
 
-  // Generate Multi-Casino HTML
-  const generateMultiCasinoHTML = (text: string): string => {
-    // Parse the text and wrap it in the multi-casino template structure
-    const lines = text.split('\n').filter(line => line.trim());
+  // Generate Multi-Casino HTML with intelligent mapping
+  const generateMultiCasinoHTML = (htmlString: string): string => {
+    const content = extractStructuredContent(htmlString);
 
-    let bodyContent = '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    // Extract title (first heading)
+    const title = content.headings[0]?.text || 'Your Article Title';
 
-      // Simple heuristic: if line is all caps or short, it's likely a heading
-      if (trimmed === trimmed.toUpperCase() && trimmed.length < 100) {
-        bodyContent += `<h2>${trimmed}</h2>\n`;
-      } else if (trimmed.length < 150 && !trimmed.endsWith('.')) {
-        bodyContent += `<h3>${trimmed}</h3>\n`;
-      } else {
-        bodyContent += `<p>${trimmed}</p>\n`;
-      }
+    // First 2 paragraphs as intro
+    const introParagraphs = content.paragraphs.slice(0, 2);
+
+    // Build sections based on detected headings
+    let sections = '';
+    let currentSection = '';
+    let sectionType = 'general';
+
+    for (let i = 1; i < content.headings.length; i++) {
+      const heading = content.headings[i];
+      sectionType = detectSectionType(heading.text);
+
+      const headingTag = heading.level === 2 ? 'h2' : heading.level === 3 ? 'h3' : 'h4';
+      currentSection += `<${headingTag}>${heading.text}</${headingTag}>\n`;
     }
+
+    // Add remaining paragraphs
+    const bodyParagraphs = content.paragraphs.slice(2);
+    bodyParagraphs.forEach(p => {
+      currentSection += `<p>${p}</p>\n`;
+    });
+
+    // Add lists
+    content.lists.forEach(list => {
+      const listTag = list.type === 'ul' ? 'ul' : 'ol';
+      currentSection += `<${listTag}>\n`;
+      list.items.forEach(item => {
+        currentSection += `  <li>${item}</li>\n`;
+      });
+      currentSection += `</${listTag}>\n`;
+    });
+
+    // Add tables if any
+    if (content.tables.length > 0) {
+      currentSection += `<div class="table-container">\n<div class="table-responsive">\n<table class="platform-table">\n`;
+      currentSection += `<tbody>\n`;
+      content.tables.forEach(row => {
+        currentSection += `<tr>\n`;
+        row.forEach((cell, idx) => {
+          if (idx === 0) {
+            currentSection += `  <th scope="row">${cell}</th>\n`;
+          } else {
+            currentSection += `  <td>${cell}</td>\n`;
+          }
+        });
+        currentSection += `</tr>\n`;
+      });
+      currentSection += `</tbody>\n</table>\n</div>\n</div>\n`;
+    }
+
+    sections = currentSection;
 
     return `<!DOCTYPE html>
 <html lang="en-GB">
@@ -110,9 +228,8 @@ export default function ConversionTool() {
 <div class="crypto-betting-widget" id="main-content">
 <article>
     <header class="article-header">
-        <h1>Your Article Title <span class="highlight">| Edit This Subtitle</span></h1>
-        <p class="intro">Add your introductory paragraph here. This template is for comparison articles.</p>
-        <p class="intro">This is your second intro paragraph. Customize as needed.</p>
+        <h1>${title}</h1>
+        ${introParagraphs.map(p => `<p class="intro">${p}</p>`).join('\n        ')}
     </header>
 
     <div>
@@ -122,9 +239,9 @@ export default function ConversionTool() {
     <!-- Quick Verdict Section -->
     <section class="quick-verdict" aria-labelledby="quick-verdict-heading">
         <div class="qv-header">
-            <h2 id="quick-verdict-heading" class="qv-title">Quick Verdict: Your Comparison Title</h2>
-            <p class="qv-subtitle">Add your comparison subtitle here.</p>
-            <div class="qv-updated">Last updated: <time datetime="2025-11">November 2025</time></div>
+            <h2 id="quick-verdict-heading" class="qv-title">Quick Verdict</h2>
+            <p class="qv-subtitle">Edit this subtitle with your verdict summary.</p>
+            <div class="qv-updated">Last updated: <time datetime="${new Date().toISOString().slice(0, 7)}">November 2025</time></div>
         </div>
 
         <div class="qv-trust-signals">
@@ -145,36 +262,113 @@ export default function ConversionTool() {
 
     <!-- Main Content -->
     <section class="content-section">
-        ${bodyContent}
+        ${sections}
     </section>
 
 </article>
 </div>
 
 <script>
-// Add your JavaScript here
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            const tabsContainer = this.closest('.tabs-container');
+
+            tabsContainer.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            tabsContainer.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+
+            this.classList.add('active');
+            document.getElementById(targetTab)?.classList.add('active');
+        });
+    });
+});
 </script>
 
 </body>
 </html>`;
   };
 
-  // Generate Single Casino HTML
-  const generateSingleCasinoHTML = (text: string): string => {
-    const lines = text.split('\n').filter(line => line.trim());
+  // Generate Single Casino HTML with intelligent mapping
+  const generateSingleCasinoHTML = (htmlString: string): string => {
+    const content = extractStructuredContent(htmlString);
 
-    let bodyContent = '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
+    // Extract title and intro
+    const title = content.headings[0]?.text || 'Casino Review 2025';
+    const introParagraphs = content.paragraphs.slice(0, 2);
 
-      if (trimmed === trimmed.toUpperCase() && trimmed.length < 100) {
-        bodyContent += `<h2>${trimmed}</h2>\n`;
-      } else if (trimmed.length < 150 && !trimmed.endsWith('.')) {
-        bodyContent += `<h3>${trimmed}</h3>\n`;
-      } else {
-        bodyContent += `<p>${trimmed}</p>\n`;
+    // Organize content by detected sections
+    const sections: { [key: string]: string } = {
+      overview: '',
+      bonuses: '',
+      games: '',
+      proscons: '',
+      general: ''
+    };
+
+    let currentSectionType = 'overview';
+    let sectionContent = '';
+
+    // Process headings and map to sections
+    for (let i = 1; i < content.headings.length; i++) {
+      const heading = content.headings[i];
+      const type = detectSectionType(heading.text);
+
+      // Save previous section
+      if (currentSectionType && sectionContent) {
+        sections[currentSectionType] += sectionContent;
       }
+
+      currentSectionType = type;
+      const headingTag = heading.level === 2 ? 'h3' : 'h4';
+      sectionContent = `<${headingTag}>${heading.text}</${headingTag}>\n`;
+    }
+
+    // Add paragraphs to general section
+    const bodyParagraphs = content.paragraphs.slice(2);
+    bodyParagraphs.forEach(p => {
+      sections.general += `<p>${p}</p>\n`;
+    });
+
+    // Add lists to appropriate sections
+    content.lists.forEach(list => {
+      const listTag = list.type === 'ul' ? 'ul' : 'ol';
+      let listHTML = `<${listTag}>\n`;
+      list.items.forEach(item => {
+        listHTML += `  <li>${item}</li>\n`;
+      });
+      listHTML += `</${listTag}>\n`;
+
+      // Try to assign to most relevant section
+      if (sections.games === '') {
+        sections.games += listHTML;
+      } else if (sections.bonuses === '') {
+        sections.bonuses += listHTML;
+      } else {
+        sections.general += listHTML;
+      }
+    });
+
+    // Build pros/cons if detected
+    let prosConsHTML = '';
+    if (sections.proscons) {
+      prosConsHTML = `
+        <div class="proscons-grid">
+            <div class="pros-section">
+                <h4><span aria-hidden="true">✓</span> Pros</h4>
+                <ul class="pros-list">
+                    <li>Edit pros here</li>
+                </ul>
+            </div>
+            <div class="cons-section">
+                <h4><span aria-hidden="true">✗</span> Cons</h4>
+                <ul class="cons-list">
+                    <li>Edit cons here</li>
+                </ul>
+            </div>
+        </div>`;
     }
 
     return `<!DOCTYPE html>
@@ -190,9 +384,8 @@ export default function ConversionTool() {
 <article>
 
 <header class="article-header">
-    <h1>Your Casino/Brand Name Review 2025</h1>
-    <p class="intro">Add your introductory paragraph here. This template is for single brand reviews.</p>
-    <p class="intro">Second intro paragraph. After extensive testing and analysis, customize your content.</p>
+    <h1>${title}</h1>
+    ${introParagraphs.map(p => `<p class="intro">${p}</p>`).join('\n    ')}
 </header>
 
 <div>
@@ -202,9 +395,9 @@ export default function ConversionTool() {
 <!-- Quick Verdict Section -->
 <section class="quick-verdict">
     <div class="qv-header">
-        <h2 class="qv-title">Quick Verdict: Your Review Title</h2>
+        <h2 class="qv-title">Quick Verdict</h2>
         <p class="qv-subtitle">After extensive testing...</p>
-        <div class="qv-updated">Last updated: <time datetime="2025-11">November 2025</time></div>
+        <div class="qv-updated">Last updated: <time datetime="${new Date().toISOString().slice(0, 7)}">November 2025</time></div>
     </div>
 
     <div class="qv-trust-signals">
@@ -219,16 +412,71 @@ export default function ConversionTool() {
     </div>
 </section>
 
-<!-- Main Content -->
+<!-- Platform Card with Tabs -->
+<div class="platform-card">
+    <div class="tabs-container">
+        <div class="tab-nav" role="tablist">
+            <button class="tab-button active" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+            <button class="tab-button" role="tab" data-tab="bonuses">Bonuses</button>
+            <button class="tab-button" role="tab" data-tab="games">Games</button>
+            <button class="tab-button" role="tab" data-tab="proscons">Pros & Cons</button>
+        </div>
+
+        <div class="tab-content">
+            <div class="tab-pane active" id="overview">
+                ${sections.overview || sections.general}
+            </div>
+
+            <div class="tab-pane" id="bonuses">
+                ${sections.bonuses || '<p>Edit bonus information here</p>'}
+            </div>
+
+            <div class="tab-pane" id="games">
+                ${sections.games || '<p>Edit games information here</p>'}
+            </div>
+
+            <div class="tab-pane" id="proscons">
+                ${prosConsHTML || '<p>Edit pros and cons here</p>'}
+            </div>
+        </div>
+    </div>
+
+    <div class="risk-warning">
+        <p><strong>18+ Only:</strong> Please gamble responsibly. Visit BeGambleAware.org for support.</p>
+    </div>
+</div>
+
+<!-- Additional Content -->
 <section class="content-section">
-    ${bodyContent}
+    ${sections.general}
 </section>
 
 </article>
 </div>
 
 <script>
-// Add your JavaScript here
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            const tabsContainer = this.closest('.tabs-container');
+
+            tabsContainer.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', 'false');
+            });
+            tabsContainer.querySelectorAll('.tab-pane').forEach(pane => {
+                pane.classList.remove('active');
+            });
+
+            this.classList.add('active');
+            this.setAttribute('aria-selected', 'true');
+            document.getElementById(targetTab)?.classList.add('active');
+        });
+    });
+});
 </script>
 
 </body>
@@ -267,7 +515,7 @@ export default function ConversionTool() {
           Word to HTML Converter
         </h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-          Upload your .docx file, select a template, and convert plain text to styled HTML using your custom templates
+          Upload your .docx file, select a template, and convert to styled HTML with intelligent content mapping
         </p>
       </div>
 
@@ -339,10 +587,10 @@ export default function ConversionTool() {
       </div>
 
       {/* Convert Button */}
-      {selectedTemplate && extractedText && (
+      {selectedTemplate && extractedHTML && (
         <div className="mb-8 text-center">
           <button
-            onClick={() => convertToHTML(extractedText, selectedTemplate)}
+            onClick={() => convertToHTML(extractedHTML, selectedTemplate)}
             disabled={isProcessing}
             className="px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold rounded-lg shadow-lg hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -407,7 +655,7 @@ export default function ConversionTool() {
                     srcDoc={convertedHTML}
                     className="w-full min-h-[500px] border-0"
                     title="Preview"
-                    sandbox="allow-same-origin"
+                    sandbox="allow-same-origin allow-scripts"
                   />
                 </div>
               </div>
@@ -419,15 +667,15 @@ export default function ConversionTool() {
       {/* Instructions */}
       <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-blue-900 mb-3">
-          💡 How to Use
+          💡 Smart Conversion Features
         </h3>
-        <ol className="list-decimal list-inside space-y-2 text-blue-800">
-          <li>Select the template that best matches your content type</li>
-          <li>Upload your Word document (.docx format)</li>
-          <li>Click "Convert to HTML" to generate styled HTML</li>
-          <li>Preview the output and download or copy the HTML code</li>
-          <li>Paste the HTML into your CMS or save it for later use</li>
-        </ol>
+        <ul className="list-disc list-inside space-y-2 text-blue-800">
+          <li><strong>Preserves structure:</strong> Headings, lists, tables from your Word doc</li>
+          <li><strong>Intelligent mapping:</strong> Automatically detects FAQs, pros/cons, features</li>
+          <li><strong>Semantic HTML:</strong> Proper heading hierarchy (H2, H3, H4)</li>
+          <li><strong>Section detection:</strong> Identifies bonus, games, payment sections by keywords</li>
+          <li><strong>Template integration:</strong> Maps content to appropriate template sections</li>
+        </ul>
       </div>
     </div>
   );
